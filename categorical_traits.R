@@ -276,5 +276,5 @@ r.squaredGLMM(mod_addition)
 # [1,] 0.06947318 0.1157023
 
 
-load("dc.phylo.eig.r") 
+
 
