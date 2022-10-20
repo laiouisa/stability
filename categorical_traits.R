@@ -208,7 +208,7 @@ mod_interaction<- lmer(z.sp_cv~ (z.log.mean_height + z.mean_LeafN + z.mean_LeafP
                         z.log.mean_SeedMass + z.log.mean_SLA + z.mean_LDMC + z.mean_SSD)*lifespan_new -1 +
                         (1|Group.1) + (1|Group.2),
                       mean_stability_all, REML=F)
-summary(mod_interaction)
+summary(mod_interaction) #Number of obs: 676, groups:  Group.1, 93; Group.2, 67
 coefplot(mod_interaction)
 r.squaredGLMM(mod_interaction)
 # R2m       R2c
@@ -216,13 +216,12 @@ r.squaredGLMM(mod_interaction)
 
 mod_interaction@frame$Group.1 #only 93 levels - spp for which we have all the traits!
 
-mod_interaction.final<-  lmer(z.sp_cv~ (z.log.mean_height + z.mean_LeafN + z.mean_LeafP +    
-                                          z.log.mean_SeedMass + z.log.mean_SLA + z.mean_LDMC + z.mean_SSD)*lifespan_new -1 +
+mod_interaction.final<-  lmer(z.sp_cv~ ( z.mean_LeafN + z.log.mean_SeedMass + z.log.mean_SLA + z.mean_LDMC)*lifespan_new -1 +
                                 (1|Group.1) + (1|Group.2),
                               mean_stability_all, REML=F)
-summary(mod_interaction.final)
-coefplot(mod_interaction.final) #interaction between not-annuals and leafN keeps comming out as sign
-r.squaredGLMM(mod_interaction.final) 
+summary(mod_interaction.final) #Number of obs: 1630, groups:  Group.1, 395; Group.2, 77
+coefplot(mod_interaction.final) #interaction between not-annuals and leafN keeps comming out 
+r.squaredGLMM(mod_interaction.final) #R2m 0.1041634 R2c 0.1862911
 
 # annual             not-annual 
 # 606  (283 spp)     3278 (1516 spp)

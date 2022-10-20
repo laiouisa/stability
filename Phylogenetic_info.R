@@ -1,12 +1,15 @@
 #Adding Phylogenetic info into the analyses
 
+#packages--------
 getwd()
 library(tidyverse)#managing data
 library(ape) #plot.phylo
 # install.packages("devtools") #not working
 # library(devtools)
 # devtools::install_github("GuangchuangYu/treeio")
-library(phylobase)
+library(phylobase) #for phylo tree manipulation
+library(vegan) #for multivariate analyses
+library(adephylo) #for phylogenetic distance
 
 
 #data from original analyses-----
@@ -66,7 +69,7 @@ save(sub_tree, file="subset_tree.RData")
 #--------Using eigenvalues (PCA axes of phylogenetic distance)------------
 
 load("dc.phylo.eig.r") 
-head(dc.phylo.eig) #?? are these from the db RDA??
+head(dc.phylo.eig) #?? are these from the db RDA?? detrended correspondence analyses?
 dim(dc.phylo.eig) #50 axes for #461 observations??
 summary(is.na(dc.phylo.eig))
 load("phylo.eig.r")
@@ -79,6 +82,7 @@ summary(is.na(phylo.eig))
 eigenval<-phylo.eig
 eigenval$names<- row.names(eigenval)
 summary(is.na(eigenval))
+dim(eigenval)
 
 #add all eigenvalues (15 axes selected from the 50 that explain 80% of variability in the phylogeny) to main table 
 
@@ -86,8 +90,9 @@ mean_stability_all_phylo<-left_join(mean_stability_all,eigenval, by=c('Group.1'=
 mean_stability_all_phylo$A50
 mean_stability_all_phylo[c('Group.1', 'A1')]
 names(mean_stability_all_phylo)
+unique(mean_stability_all$Group.1) #1799 species
 
-#Option 1 - Effects of traits beyond phylogeny - using residuals of a model of CV explained by eigenvalues
+#Option 1 - Effects of traits beyond phylogeny - using residuals of a model of CV explained by eigenvalues-------
 names(mean_stability_all_phylo)
 mod_phylo<- lm(as.formula(paste('z.sp_cv', paste(names(mean_stability_all_phylo)[43:57], collapse=" + "), sep=" ~ ")), 
                  data=mean_stability_all_phylo) #the model doesn't include random effects
@@ -95,8 +100,6 @@ mod_phylo<- lm(as.formula(paste('z.sp_cv', paste(names(mean_stability_all_phylo)
 #original dim 3884 observations, actual dim 3798
 summary(mod_phylo)
 dim(mod_phylo$model)  
-
-#IT ALL WORKS BETTER IF I USE LESS AXES (StepAIC on the 15 axes..)
 
 #using spp as random effect
 mod_phylo$terms
@@ -106,35 +109,66 @@ summary(mod_phylo_random) #Number of obs: 3798, groups:  Group.1, 1745; Group.2,
 
 #make residual table with species names 
 phylo_residuals<-as.tibble(resid(mod_phylo_random))
-phylo_residuals$species<-mean_stability_all_phylo$Group.1[!is.na(z.sp_cv)&!is.na(mean_stability_all_phylo['A1'])]
-unique(phylo_residuals$species) #1745 species
+phylo_residuals$Group.1<-mean_stability_all_phylo$Group.1[!is.na(z.sp_cv)&!is.na(mean_stability_all_phylo['A1'])]
+unique(phylo_residuals$Group.1) #1745 species
 #add residuals to phylo table
-mean_stability_all_phylo<-left_join(mean_stability_all_phylo, phylo_residuals, by=c('Group.1'='species'))
-colnames(mean_stability_all_phylo)[58]<-'phylo_residuals'
+mean_stability_all_phylo #A tibble: 3,884 × 57
+unique(mean_stability_all_phylo$Group.1) #1799
+phylo_residuals #A tibble: 3,798 × 2
+unique(phylo_residuals$Group.1) #1745
+mean_stability_all_phylo$phylo_resid[!is.na(z.sp_cv)&!is.na(mean_stability_all_phylo['A1'])]<-phylo_residuals$value
 
 #model using residuals i.e. portion of the CV variability left unexplained by the phylogeny
 names(mean_stability_all_phylo)
-mod_cv_phyloresid<- lmer(phylo_residuals ~ z.log.mean_height + z.mean_LeafN + z.mean_LeafP +    
+mod_cv_phyloresid<- lmer(phylo_resid ~ z.log.mean_height + z.mean_LeafN + z.mean_LeafP +    
                            z.log.mean_SeedMass + z.log.mean_SLA + z.mean_LDMC + z.mean_SSD +
                            (1|Group.1) + (1|Group.2), data=mean_stability_all_phylo)
 #boundary (singular) fit: see ?isSingular
-summary(mod_cv_phyloresid) #Number of obs: 8595, groups:  Group.1, 92; Group.2, 67
-coefplot(mod_cv_phyloresid)
-r.squaredGLMM(mod_cv_phyloresid) #R2m 0.001610543 R2c 0.007688418
+summary(mod_cv_phyloresid) #Number of obs: 675, groups:  Group.1, 92; Group.2, 67
+coefplot(mod_cv_phyloresid) #LDMC and Seed mass still negative, LDMC almost sign
+r.squaredGLMM(mod_cv_phyloresid) #R2m 0.003629667 R2c 0.01499085
 
-mod_cv_phyloresid_final<- lmer(phylo_residuals ~  z.mean_LeafN + z.log.mean_SeedMass + z.log.mean_SLA + z.mean_LDMC +
+mod_cv_phyloresid_final<- lmer(phylo_resid ~  z.mean_LeafN + z.log.mean_SeedMass + z.log.mean_SLA + z.mean_LDMC +
                            (1|Group.1)+ (1|Group.2) , data=mean_stability_all_phylo)
 # boundary (singular) fit: see ?isSingular
-summary(mod_cv_phyloresid_final) #Number of obs: 14124, groups:  Group.1, 390; Group.2, 77
-rePCA(mod_cv_phyloresid_final) #it is beccause of datasets 
-coefplot(mod_cv_phyloresid_final)
-r.squaredGLMM(mod_cv_phyloresid_final)#R2m 0.00423158 R2c 0.01560563
+summary(mod_cv_phyloresid_final) #Number of obs: 1622, groups:  Group.1, 390; Group.2, 77
+rePCA(mod_cv_phyloresid_final) #it is beccause of species random factor
+coefplot(mod_cv_phyloresid_final)#LDMC and SLA significative 
+r.squaredGLMM(mod_cv_phyloresid_final)#R2m 0.009478955 R2c 0.01978616
 
-mod_cv_phyloresid_final.1<- lmer(phylo_residuals ~  z.mean_LeafN + z.log.mean_SeedMass + z.log.mean_SLA + z.mean_LDMC +
-                                 (1|Group.1) , data=mean_stability_all_phylo) #no singularity
-summary(mod_cv_phyloresid_final.1) #Number of obs: 14124, groups:  Group.1, 390
-coefplot(mod_cv_phyloresid_final.1)
-r.squaredGLMM(mod_cv_phyloresid_final.1) #R2m 0.00423158 R2c 0.01560564 - it stays the same!! 
+mod_cv_phyloresid_final.1<- lmer(phylo_resid ~  z.mean_LeafN + z.log.mean_SeedMass + z.log.mean_SLA + z.mean_LDMC +
+                                 (1|Group.2) , data=mean_stability_all_phylo) #no singularity
+summary(mod_cv_phyloresid_final.1) #Number of obs: 1622, groups:  Group.2, 77
+coefplot(mod_cv_phyloresid_final.1)#LDMC and SLA significative
+r.squaredGLMM(mod_cv_phyloresid_final.1) #R2m 0.009478955 R2c 0.01978616 - it stays the same!! 
+
+
+
+#Option 2 - Effects of traits AND phylogeny (excluding overlapping part)-------------
+
+mean_stability_all_phylo[43:57] #selected axes from PCoA using phyl dist
+sub_tree #tree - from which I can calculate distances - which distance method?
+dist_phylo<-distTips(sub_tree)
+head(dist_phylo) 
+length(dist_phylo)
+labels(dist_phylo) #1750 species
+
+#dbRDA Pcoa phylo~traits
+rda(dist_phylo~z.log.mean_height + z.mean_LeafN + z.mean_LeafP +    
+  z.log.mean_SeedMass + z.log.mean_SLA + z.mean_LDMC + z.mean_SSD, data= mean_stability_all_phylo, na.action=na.omit) 
+# Error in qr.fitted(Q, Y) : NA/NaN/Inf in foreign function call (arg 5) because of duplicates??
+# Error in X[nas, , drop = FALSE] : subscript out of bounds
+
+names(mean_stability_all_phylo)
+mean_stability_all_phylo %>% drop_na(names(mean_stability_all_phylo)[27:33]) #NAs dropped directly on the function L148
+
+
+#usare file dc.phylo.eig - selezionare primi 10 assi lme(cv~traits+10 assi, random)  da confrontare con lme(cv ~traits) [sulla stessa quantita di species]
+
+#aggiungere 10 assi su mean_stability_all_phylo
+dc.phylo.eig$Group.1<-row.names(dc.phylo.eig) #461 spp -- too little 
+mean_stability_all_phylo%>%left_join(dc.phylo.eig, by='Group.1')
+
 
 
 
