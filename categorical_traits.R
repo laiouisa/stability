@@ -10,6 +10,7 @@ library(car)
 library(coefplot)
 library(jtools)
 library(huxtable)
+library(partR2)#Partitioning R2 in generalized linear mixed models
 
 #data-------
 #data from original analyses
@@ -22,6 +23,28 @@ length(unique(mean_stability_all$Group.1)) #1799 species
 
 summary(is.na(mean_stability_all$z.sp_cv)) #15 entries with no standardized CV
 mean_stability_all[is.na(mean_stability_all$z.sp_cv),c("Group.1", "Group.2","sp_cv" , "residency_prop", "z.sp_cv")]
+
+#original models-----
+original<- lmer(z.sp_cv~ z.log.mean_height + z.mean_LeafN + z.mean_LeafP +    
+                  z.log.mean_SeedMass + z.log.mean_SLA + z.mean_LDMC + z.mean_SSD+
+                  (1|Group.1) + (1|Group.2),
+                mean_stability_all[woodyness_new=="non-woody",], REML=F)
+summary(original)#Number of obs: 676, groups:  Group.1, 93; Group.2, 67
+r.squaredGLMM(original)
+summary(partR2(original, c("z.log.mean_height" , "z.mean_LeafN" , "z.mean_LeafP" ,    
+                           "z.log.mean_SeedMass" , "z.log.mean_SLA" , "z.mean_LDMC", "z.mean_SSD")))
+
+original.final<-  lmer(z.sp_cv~  z.mean_LeafN + z.log.mean_SeedMass + z.log.mean_SLA + z.mean_LDMC +
+                         (1|Group.1) + (1|Group.2),
+                       mean_stability_all[woodyness_new=="non-woody",], REML=F)
+summary(original.final)#Number of obs: 1630, groups:  Group.1, 395; Group.2, 77
+summary(partR2(original.final, c( "z.mean_LeafN" ,"z.log.mean_SeedMass" , "z.log.mean_SLA" , "z.mean_LDMC")))
+
+
+
+
+
+
 
 #Categorical traits names
 # "growthform"  "woodyness" "woodyness_new" "lifeform" "lifespan" "lifespan_new"    
@@ -205,9 +228,9 @@ r.squaredGLMM(mod_notannuals_final)
 #Quantitative traits in interaction with life span----
 
 mod_interaction<- lmer(z.sp_cv~ (z.log.mean_height + z.mean_LeafN + z.mean_LeafP +    
-                        z.log.mean_SeedMass + z.log.mean_SLA + z.mean_LDMC + z.mean_SSD)*lifespan_new -1 +
+                        z.log.mean_SeedMass + z.log.mean_SLA + z.mean_LDMC + z.mean_SSD)*lifespan_new +
                         (1|Group.1) + (1|Group.2),
-                      mean_stability_all, REML=F)
+                      mean_stability_all[woodyness_new=="non-woody",], REML=F)
 summary(mod_interaction) #Number of obs: 676, groups:  Group.1, 93; Group.2, 67
 coefplot(mod_interaction)
 r.squaredGLMM(mod_interaction)
@@ -216,18 +239,28 @@ r.squaredGLMM(mod_interaction)
 
 mod_interaction@frame$Group.1 #only 93 levels - spp for which we have all the traits!
 
-mod_interaction.final<-  lmer(z.sp_cv~ ( z.mean_LeafN + z.log.mean_SeedMass + z.log.mean_SLA + z.mean_LDMC)*lifespan_new -1 +
+
+mod_interaction.final<-  lmer(z.sp_cv~ ( z.mean_LeafN + z.log.mean_SeedMass + z.log.mean_SLA + z.mean_LDMC)*lifespan_new +
                                 (1|Group.1) + (1|Group.2),
-                              mean_stability_all, REML=F)
+                              mean_stability_all[woodyness_new=="non-woody",], REML=F)
 summary(mod_interaction.final) #Number of obs: 1630, groups:  Group.1, 395; Group.2, 77
-coefplot(mod_interaction.final) #interaction between not-annuals and leafN keeps comming out 
-r.squaredGLMM(mod_interaction.final) #R2m 0.1041634 R2c 0.1862911
+coefplot(mod_interaction.final) # LDMC is not significant
+r.squaredGLMM(mod_interaction.final) #R2m 0.1041634 R2c 0.1862911 - CHECK VARIATION PARTITIONING
+summary(partR2(mod_interaction.final, c("z.mean_LDMC", "z.mean_LDMC:lifespan_new","lifespan_new", "z.mean_LeafN:lifespan_new", "z.mean_LeafN" )))
+
+mod_interaction.final.1<-  lmer(z.sp_cv~ ( z.mean_LeafN)*lifespan_new + z.mean_LDMC+
+                                (1|Group.1) + (1|Group.2),
+                              mean_stability_all[woodyness_new=="non-woody",], REML=F)
+r.squaredGLMM(mod_interaction.final.1) #R2m 0.1031575 R2c 0.1851685
+coefplot(mod_interaction.final.1) # LDMC significant again
+summary(mod_interaction.final.1)
 
 # annual             not-annual 
 # 606  (283 spp)     3278 (1516 spp)
 summary(z.mean_LeafN[lifespan_new=='annual']) #343 NAs
 summary(z.mean_LeafN[lifespan_new=='not-annual']) #1602 NAs 
 
+summary(partR2(mod_interaction.final.1))
 
 p<- ggplot(data = mean_stability_all[!is.na(mean_stability_all$z.sp_cv),], 
                 aes(y=z.mean_LeafN, x=lifespan_new))+
