@@ -11,6 +11,7 @@ library(coefplot)
 library(jtools)
 library(huxtable)
 library(partR2)#Partitioning R2 in generalized linear mixed models
+library(ggpubr)
 
 #data-------
 #data from original analyses
@@ -228,7 +229,7 @@ r.squaredGLMM(mod_notannuals_final)
 #Quantitative traits in interaction with life span----
 
 mod_interaction<- lmer(z.sp_cv~ (z.log.mean_height + z.mean_LeafN + z.mean_LeafP +    
-                        z.log.mean_SeedMass + z.log.mean_SLA + z.mean_LDMC + z.mean_SSD)*lifespan_new +
+                        z.log.mean_SeedMass + z.log.mean_SLA + z.mean_LDMC + z.mean_SSD)*lifespan_new -1 +
                         (1|Group.1) + (1|Group.2),
                       mean_stability_all[woodyness_new=="non-woody",], REML=F)
 summary(mod_interaction) #Number of obs: 676, groups:  Group.1, 93; Group.2, 67
@@ -239,14 +240,65 @@ r.squaredGLMM(mod_interaction)
 
 mod_interaction@frame$Group.1 #only 93 levels - spp for which we have all the traits!
 
+#plot full-------
+p.mod_interaction<-coefplot(mod_interaction, intercept = F, title='', color="black",
+                               pointSize = 3, lwdInner = 2, lwdOuter = 1, sort = 'alphabetical', decreasing=T)
+row.names(summary(mod_interaction)$coefficients)
 
-mod_interaction.final<-  lmer(z.sp_cv~ ( z.mean_LeafN + z.log.mean_SeedMass + z.log.mean_SLA + z.mean_LDMC)*lifespan_new +
+temp.labels<-c( "z.log.mean_height"=  "Plant Height",                        
+                "z.mean_LeafN"  =   "Leaf N content",                       
+                "z.mean_LeafP"  =   "Leaf P content",                         
+                "z.log.mean_SeedMass" =  "Seed Mass",                    
+                "z.log.mean_SLA" = "SLA" ,                           
+                "z.mean_LDMC" = "LDMC" ,                             
+                "z.mean_SSD"  = "SSD",                              
+                "lifespan_newannual" = "annual",                        
+                "lifespan_newnot-annual"  = "not-annual",                   
+                "z.log.mean_height:lifespan_newnot-annual" = "Plant Height:not-annual",
+                "z.mean_LeafN:lifespan_newnot-annual" = "Leaf N content:not-annual",    
+                "z.mean_LeafP:lifespan_newnot-annual" =  "Leaf P content:not-annual"    ,
+                "z.log.mean_SeedMass:lifespan_newnot-annual" =  "Seed Mass:not-annual",
+                "z.log.mean_SLA:lifespan_newnot-annual" = "SLA:not-annual",
+                "z.mean_LDMC:lifespan_newnot-annual" =  "LDMC:not-annual" ,     
+                "z.mean_SSD:lifespan_newnot-annual" = "SSD:not-annual")
+
+p.mod_interaction<-p.mod_interaction+  labs(y="", x="Coefficent") + theme_classic(base_size = 15) +
+  scale_y_discrete(labels=temp.labels)
+
+
+
+mod_interaction.final<-  lmer(z.sp_cv~ ( z.mean_LeafN + z.log.mean_SeedMass + z.log.mean_SLA + z.mean_LDMC)*lifespan_new -1 +
                                 (1|Group.1) + (1|Group.2),
                               mean_stability_all[woodyness_new=="non-woody",], REML=F)
 summary(mod_interaction.final) #Number of obs: 1630, groups:  Group.1, 395; Group.2, 77
 coefplot(mod_interaction.final) # LDMC is not significant
 r.squaredGLMM(mod_interaction.final) #R2m 0.1041634 R2c 0.1862911 - CHECK VARIATION PARTITIONING
-summary(partR2(mod_interaction.final, c("z.mean_LDMC", "z.mean_LDMC:lifespan_new","lifespan_new", "z.mean_LeafN:lifespan_new", "z.mean_LeafN" )))
+# summary(partR2(mod_interaction.final, c("z.mean_LDMC", "z.mean_LDMC:lifespan_new","lifespan_new", "z.mean_LeafN:lifespan_new", "z.mean_LeafN" )))
+
+#plot final-------
+p.mod_interaction.final<-coefplot(mod_interaction.final, intercept = F, title='', color="black",
+                            pointSize = 3, lwdInner = 2, lwdOuter = 1, sort = 'alphabetical', decreasing=T)
+row.names(summary(mod_interaction.final)$coefficients)
+
+temp.labels<-c( "z.mean_LeafN"  =   "Leaf N content",                       
+                "z.log.mean_SeedMass" =  "Seed Mass",                    
+                "z.log.mean_SLA" = "SLA" ,                           
+                "z.mean_LDMC" = "LDMC" ,                             
+                "lifespan_newannual" = "annual",                        
+                "lifespan_newnot-annual"  = "not-annual",                   
+                "z.mean_LeafN:lifespan_newnot-annual" = "Leaf N content:not-annual",    
+               "z.log.mean_SeedMass:lifespan_newnot-annual" =  "Seed Mass:not-annual",
+                "z.log.mean_SLA:lifespan_newnot-annual" = "SLA:not-annual",
+                "z.mean_LDMC:lifespan_newnot-annual" =  "LDMC:not-annual" )
+
+p.mod_interaction.final<-p.mod_interaction.final+  labs(y="", x="Coefficent") + theme_classic(base_size = 15) +
+  scale_y_discrete(labels=temp.labels)
+
+#plot together------
+# getwd()
+# tiff('interaction.life_span.tiff', units="cm", width=33, height=11, res=300, compression = 'lzw')
+ggarrange(p.mod_interaction, p.mod_interaction.final, labels = 'auto')
+# dev.off()
 
 mod_interaction.final.1<-  lmer(z.sp_cv~ ( z.mean_LeafN)*lifespan_new + z.mean_LDMC+
                                 (1|Group.1) + (1|Group.2),
