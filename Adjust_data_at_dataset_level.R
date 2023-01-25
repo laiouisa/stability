@@ -19,6 +19,9 @@ library(RColorBrewer)
 # library(sjmisc)
 library(jtools)
 library(huxtable)
+library(lmerTest)
+library(MASS)
+library(cAIC4)
 
 source("/Users/laiouisa/OneDrive - ČZU v Praze/R/R scripts/facetzoom2.R") #for facet zoom on the right 
 
@@ -180,13 +183,9 @@ mean_stability[,"Group.2"] #dataset
 mod_mean_z.cv.halfFULL<- lmer(z.sp_cv ~ z.log.mean_height + z.mean_LeafN + z.mean_LeafP +    
                               z.log.mean_SeedMass + z.log.mean_SLA + z.mean_LDMC + z.mean_SSD +
                           (1|Group.1) + (1|Group.2), 
-                        data= mean_stability%>%filter(woodyness_new=='non-woody'), REML = F)
+                        data= dataframe.non_woody, REML = F)
 
-mod_mean_cv.halfFULL<- lmer(sp_cv ~ z.log.mean_height + z.mean_LeafN + z.mean_LeafP +    
-                              z.log.mean_SeedMass + z.log.mean_SLA + z.mean_LDMC + z.mean_SSD +
-                              (1|Group.1) + (1|Group.2), 
-                            data= mean_stability%>%filter(woodyness_new=='non-woody'), REML = F)
-                            
+dataframe.non_woody<-mean_stability%>%filter(woodyness_new=='non-woody')
 
 summary(mod_mean_z.cv.halfFULL)
 r.squaredGLMM(mod_mean_z.cv.halfFULL) #0.0488 0009 0.1278361
@@ -204,13 +203,13 @@ c<-coefplot(mod_mean_z.cv.halfFULL, intercept = F, title = "z.scores")
 c+ geom_text(x=-0.2, y=7, label="R2m=0.05\nR2c=0.13", size=2)
 
 
-summary(mod_mean_cv.halfFULL)
-c<-coefplot(mod_mean_cv.halfFULL, intercept = F, title= "normal")
+summary(mod_mean_z.cv.halfFULL)
+c<-coefplot(mod_mean_z.cv.halfFULL, intercept = F, title= "normal")
 
 c+ geom_text(x=-0.1, y=7, label="R2m=0.04\nR2c=0.39", size=2)
 
-r.squaredGLMM(mod_mean_cv.halfFULL) #0.04009069 0.3937302
-AIC(mod_mean_cv.halfFULL) #1939.179
+r.squaredGLMM(mod_mean_z.cv.halfFULL) #0.04009069 0.3937302
+AIC(mod_mean_z.cv.halfFULL) #1939.179
 
 #and then simplifying the model - 
 #This would replace the boosted regression trees,
@@ -223,7 +222,7 @@ drop1(mod_mean_z.cv.halfFULL , trace = T , na.action=na.omit) #not working
 
 #compare manually?
 coefplot(mod_mean_z.cv.halfFULL)
- r.squaredGLMM(mod_mean_z.cv.halfFULL) 
+r.squaredGLMM(mod_mean_z.cv.halfFULL) 
 AIC(mod_mean_z.cv.halfFULL) #1939.179 #cannot compare it because of NAs!
 #scale(mean_LeafP) scale(mean_SSD) 
 
@@ -288,6 +287,55 @@ plot(unlist(mean_stability%>%filter(woodyness_new=='non-woody')%>%select(z.mean_
 cor.test(unlist(mean_stability%>%filter(woodyness_new=='non-woody')%>%select(z.mean_LDMC)), unlist(mean_stability%>%filter(woodyness_new=='non-woody')%>%select( z.log.mean_SeedMass)))
 plot(unlist(mean_stability%>%filter(woodyness_new=='non-woody')%>%select(z.mean_LDMC)), unlist(mean_stability%>%filter(woodyness_new=='non-woody')%>%select( z.log.mean_SeedMass)))
 
+
+#compare AIC for full and reduced model --------------
+#fit reduced with dataset from full
+mod_mean_z.cv.halfFULL #full model
+mod_mean_z.cv #reduced model
+
+frame.full<-mod_mean_z.cv.halfFULL@frame
+
+mod_reduced.frame.full<- lmer(z.sp_cv ~ z.mean_LeafN + z.log.mean_SeedMass + z.log.mean_SLA +     
+                                z.mean_LDMC + (1 | Group.1) + (1 | Group.2),
+                              data= frame.full, REML = F)
+summary(mod_reduced.frame.full) #AIC  1934.6
+summary(mod_mean_z.cv.halfFULL) #AIC 1939.2
+
+#stepAIC by hand - but there are still NAs??
+AIC(mod_mean_z.cv.halfFULL) #1939.179
+AIC(update(mod_mean_z.cv.halfFULL, .~. -   z.mean_SSD)) #3980.805 higher
+AIC(update(mod_mean_z.cv.halfFULL, .~. -  z.mean_LeafP)) #1969.341 higher
+AIC(update(mod_mean_z.cv.halfFULL, .~. -  z.log.mean_height)) #1937.189 #lowest
+AIC(update(mod_mean_z.cv.halfFULL, .~. -  z.log.mean_SLA)) #1937.233 - lower
+AIC(update(mod_mean_z.cv.halfFULL, .~. -  z.mean_LeafN)) #1937.324 - lower
+AIC(update(mod_mean_z.cv.halfFULL, .~. -  z.mean_LDMC)) #1960.271 - higher
+AIC(update(mod_mean_z.cv.halfFULL, .~. -  z.log.mean_SeedMass)) #1951.56 - higher
+
+mod_step.aic<-update(mod_mean_z.cv.halfFULL, .~. -  z.log.mean_height)
+AIC(mod_step.aic) #1937.189
+AIC(update(mod_step.aic, .~. -  z.mean_SSD)) #3988.097
+AIC(update(mod_step.aic, .~. -  z.mean_LeafP)) #1967.398
+AIC(update(mod_step.aic, .~. -  z.log.mean_SLA)) #1935.24 #lowest
+AIC(update(mod_step.aic, .~. -  z.mean_LeafN)) #1935.331 
+AIC(update(mod_step.aic, .~. -  z.mean_LDMC)) #1958.47
+AIC(update(mod_step.aic, .~. -  z.log.mean_SeedMass)) #1949.6
+
+mod_step.aic<-update(mod_step.aic, .~. -  z.log.mean_SLA)
+AIC(mod_step.aic) #1935.24
+AIC(update(mod_step.aic, .~. -  z.mean_SSD)) #3987.352
+AIC(update(mod_step.aic, .~. -  z.mean_LeafP)) #1965.502
+AIC(update(mod_step.aic, .~. -  z.mean_LeafN)) #1933.487 #lowest
+AIC(update(mod_step.aic, .~. -  z.mean_LDMC)) #1956.708
+AIC(update(mod_step.aic, .~. -  z.log.mean_SeedMass)) #1947.727
+
+mod_step.aic<-update(mod_step.aic, .~. -  z.mean_LeafN)
+AIC(mod_step.aic) #1933.487
+AIC(update(mod_step.aic, .~. -  z.mean_SSD)) #3990.761
+AIC(update(mod_step.aic, .~. -  z.mean_LeafP)) #1980.44
+AIC(update(mod_step.aic, .~. -  z.mean_LDMC)) #1957.914
+AIC(update(mod_step.aic, .~. -  z.log.mean_SeedMass)) #1946.203
+summary(mod_step.aic)
+
 #tables-----
 mod_mean_z.cv
 
@@ -300,6 +348,17 @@ number_format(tab)<-gsub("%.2f", "%.4f", number_format(tab))
 # tab_final<-tab
 # 
 # tab_final<- add_rows(tab_final, tab)
+
+#AIC comparison table
+tab_aic<-export_summs(mod_mean_z.cv.halfFULL, mod_reduced.frame.full, 
+                  note=NULL) # results = 'asis'
+#p values calculated using Satterthwaite d.f.
+quick_xlsx(tab_aic, file='table_aic.xlsx')
+# tab$names[1]<-"GEN_MPD_Multi_trait"
+number_format(tab)<-gsub("%.2f", "%.4f", number_format(tab))
+
+summary(mod_reduced.frame.full) #AIC  1934.6
+summary(mod_mean_z.cv.halfFULL) #AIC 1939.2
 
 
 #coefficent plot------
